@@ -1,0 +1,173 @@
+RMI Server
+
+Item.java (POJO):
+java
+Copy code
+import java.io.Serializable;
+
+public class Item implements Serializable {
+    private int id;
+    private String name;
+    private String description;
+
+    public Item(int id, String name, String description) {
+        this.id = id;
+        this.name = name;
+        this.description = description;
+    }
+
+    // Getters and setters
+}
+
+
+
+ItemService.java (Interface):
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+import java.util.List;
+
+public interface ItemService extends Remote {
+    List<Item> getAllItems() throws RemoteException;
+    void addItem(Item item) throws RemoteException;
+    void updateItem(Item item) throws RemoteException;
+    void deleteItem(int itemId) throws RemoteException;
+}
+
+
+
+
+
+ItemServiceImpl.java (Implementation):
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+public class ItemServiceImpl extends UnicastRemoteObject implements ItemService {
+    private Connection connection;
+
+    public ItemServiceImpl() throws RemoteException {
+        super();
+        try {
+            Class.forName("com.mysql.jdbc.Driver");
+            connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/mydatabase", "username", "password");
+        } catch (ClassNotFoundException | SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public List<Item> getAllItems() throws RemoteException {
+        List<Item> items = new ArrayList<>();
+        try {
+            PreparedStatement statement = connection.prepareStatement("SELECT * FROM items");
+            ResultSet resultSet = statement.executeQuery();
+            while (resultSet.next()) {
+                Item item = new Item(resultSet.getInt("id"), resultSet.getString("name"), resultSet.getString("description"));
+                items.add(item);
+            }
+            statement.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return items;
+    }
+
+    @Override
+    public void addItem(Item item) throws RemoteException {
+        try {
+            PreparedStatement statement = connection.prepareStatement("INSERT INTO items (name, description) VALUES (?, ?)");
+            statement.setString(1, item.getName());
+            statement.setString(2, item.getDescription());
+            statement.executeUpdate();
+            statement.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void updateItem(Item item) throws RemoteException {
+        try {
+            PreparedStatement statement = connection.prepareStatement("UPDATE items SET name=?, description=? WHERE id=?");
+            statement.setString(1, item.getName());
+            statement.setString(2, item.getDescription());
+            statement.setInt(3, item.getId());
+            statement.executeUpdate();
+            statement.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void deleteItem(int itemId) throws RemoteException {
+        try {
+            PreparedStatement statement = connection.prepareStatement("DELETE FROM items WHERE id=?");
+            statement.setInt(1, itemId);
+            statement.executeUpdate();
+            statement.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+RMIServer.java:
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+
+public class RMIServer {
+    public static void main(String[] args) {
+        try {
+            ItemService itemService = new ItemServiceImpl();
+            Registry registry = LocateRegistry.createRegistry(1099);
+            registry.rebind("itemService", itemService);
+            System.out.println("RMI Server is running...");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+
+
+RMI Client (Not necessary for CRUD but for demonstration)
+If you want to test your RMI server, you can create an RMI client to interact with it.
+
+RMIClient.java:
+java
+Copy code
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.util.List;
+
+public class RMIClient {
+    public static void main(String[] args) {
+        try {
+            Registry registry = LocateRegistry.getRegistry("localhost", 1099);
+            ItemService itemService = (ItemService) registry.lookup("itemService");
+
+            // Example usage: Get all items
+            List<Item> items = itemService.getAllItems();
+            for (Item item : items) {
+                System.out.println("Item: " + item.getName() + ", Description: " + item.getDescription());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
